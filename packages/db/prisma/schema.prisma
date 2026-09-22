@@ -1,0 +1,186 @@
+// packages/db/prisma/schema.prisma
+// Fonte da verdade: modelo de dados do Sistema de Gestão de Estoque — Peças de Moto
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ─── Enums ────────────────────────────────────────────────────────────────────
+
+enum Perfil {
+  ADMIN
+  OPERADOR
+}
+
+/// Categoria do produto. Usada também como prefixo do SKU.
+enum Categoria {
+  MOT /// Motor
+  FRE /// Freio
+  TRA /// Transmissão
+  ELE /// Elétrica
+  SUS /// Suspensão
+  PNE /// Pneu / Câmara
+  ACC /// Acessórios
+  OUT /// Outros
+}
+
+enum Unidade {
+  UN /// Unidade
+  CX /// Caixa
+  PC /// Peça
+  KG /// Quilograma
+  L  /// Litro
+}
+
+enum TipoMovimentacao {
+  ENTRADA   /// Aumenta estoque; recalcula custo médio
+  SAIDA     /// Diminui estoque; registra custoMedio vigente
+  AJUSTE    /// Correção manual (ADMIN); positivo não recalcula custo médio
+  PERDA     /// Avaria/furto (ADMIN); registra custoMedio vigente
+  DEVOLUCAO /// Cliente → loja; aumenta estoque sem alterar custo médio
+}
+
+// ─── Usuario ──────────────────────────────────────────────────────────────────
+
+model Usuario {
+  id               String    @id @default(cuid())
+  nome             String
+  email            String    @unique
+  senhaHash        String
+  perfil           Perfil
+  ativo            Boolean   @default(true)
+  /// Contador de tentativas de login falhas consecutivas. Zerado após login OK.
+  tentativasFalhas Int       @default(0)
+  /// Momento até o qual a conta está bloqueada. null = desbloqueada.
+  bloqueadoAte     DateTime?
+  /// Hash do refresh token ativo. null = sem sessão. Zerado ao desativar usuário.
+  refreshTokenHash String?
+  criadoEm         DateTime  @default(now())
+  atualizadoEm     DateTime  @updatedAt
+
+  movimentacoes Movimentacao[]
+
+  @@index([email])
+}
+
+// ─── Fornecedor ───────────────────────────────────────────────────────────────
+
+model Fornecedor {
+  id          String   @id @default(cuid())
+  razaoSocial String
+  /// CNPJ sem máscara (14 dígitos). Validado antes de persistir.
+  cnpj        String   @unique
+  telefone    String?
+  email       String?
+  contato     String?
+  ativo       Boolean  @default(true)
+  criadoEm    DateTime @default(now())
+  atualizadoEm DateTime @updatedAt
+
+  movimentacoes Movimentacao[]
+
+  @@index([cnpj])
+  @@index([ativo])
+}
+
+// ─── Produto ──────────────────────────────────────────────────────────────────
+
+model Produto {
+  id          String    @id @default(cuid())
+  /// Formato: {CAT}-{NNNNN}. Ex: MOT-00042. Gerado atomicamente via SkuSequencia.
+  sku         String    @unique
+  nome        String
+  descricao   String?
+  categoria   Categoria
+  unidade     Unidade
+  marca       String?
+  /// Texto livre. Ex: "CG 150 2010-2015, Titan 150 2012-2016"
+  aplicacao   String?
+  /// Localização física na loja. Ex: "A-02-3"
+  localizacao String?
+  /// Caminho relativo em /uploads. Ex: "MOT-00042-1727012345678.jpg"
+  fotoUrl     String?
+  estoqueMinimo Int      @default(0)
+  /// Saldo atual em unidades. Nunca negativo.
+  estoqueAtual  Int      @default(0)
+  /// Custo médio ponderado. Recalculado apenas em ENTRADA. Arredondado para 2 casas.
+  custoMedio    Decimal  @default(0) @db.Decimal(10, 2)
+  ativo         Boolean  @default(true)
+  criadoEm      DateTime @default(now())
+  atualizadoEm  DateTime @updatedAt
+
+  codigosBarras Codigo[]
+  movimentacoes Movimentacao[]
+
+  @@index([nome])
+  @@index([categoria])
+  @@index([ativo])
+  @@index([categoria, ativo])
+}
+
+// ─── Codigo (CodigoBarras) ────────────────────────────────────────────────────
+
+model Codigo {
+  id        String   @id @default(cuid())
+  /// Valor do código de barras. Único no sistema inteiro.
+  codigo    String   @unique
+  produtoId String
+  produto   Produto  @relation(fields: [produtoId], references: [id])
+  criadoEm DateTime @default(now())
+
+  @@index([codigo])
+  @@index([produtoId])
+}
+
+// ─── SkuSequencia ─────────────────────────────────────────────────────────────
+// Controla o próximo número sequencial por categoria.
+// Usado com SELECT FOR UPDATE dentro de prisma.$transaction para evitar race condition.
+
+model SkuSequencia {
+  /// PK = categoria. Uma linha por categoria.
+  categoria Categoria @id
+  /// Próximo número a usar. Incrementado atomicamente a cada produto criado.
+  proximo   Int       @default(1)
+}
+
+// ─── Movimentacao ─────────────────────────────────────────────────────────────
+
+model Movimentacao {
+  id        String           @id @default(cuid())
+  tipo      TipoMovimentacao
+  /// Sempre positivo. O tipo define se é débito ou crédito no estoque.
+  quantidade Int
+  /// Snapshot do custo no momento do evento:
+  /// - ENTRADA: custo informado pelo usuário
+  /// - SAIDA/AJUSTE/PERDA/DEVOLUCAO: custoMedio vigente do produto no instante
+  custoUnitario Decimal      @db.Decimal(10, 2)
+  /// Obrigatório em AJUSTE e PERDA. Livre nos demais.
+  observacao    String?
+
+  produtoId  String
+  produto    Produto    @relation(fields: [produtoId], references: [id])
+
+  usuarioId  String
+  usuario    Usuario    @relation(fields: [usuarioId], references: [id])
+
+  /// Opcional. Relevante em ENTRADA para rastrear fornecedor.
+  fornecedorId String?
+  fornecedor   Fornecedor? @relation(fields: [fornecedorId], references: [id])
+
+  /// Imutável. Sem updatedAt por design — movimentações nunca são editadas.
+  criadoEm DateTime @default(now())
+
+  @@index([produtoId])
+  @@index([usuarioId])
+  @@index([tipo])
+  @@index([criadoEm])
+  /// Índice composto para relatório de vendas por período
+  @@index([produtoId, tipo, criadoEm])
+  /// Índice para dashboard: movimentações do dia
+  @@index([tipo, criadoEm])
+}
