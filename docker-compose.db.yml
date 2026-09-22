@@ -1,0 +1,23 @@
+# Sobe apenas o PostgreSQL para desenvolvimento local (sem API/Web em container)
+# Uso: docker compose -f docker-compose.db.yml up -d
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: estoque_moto_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: estoque_moto
+    ports:
+      - "5433:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d estoque_moto"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  postgres_data:
