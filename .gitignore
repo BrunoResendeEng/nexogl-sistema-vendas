@@ -1,0 +1,45 @@
+# Dependencies
+node_modules
+.pnpm-store
+
+# Turbo
+.turbo
+
+# Build outputs
+dist
+.next
+out
+build
+
+# Prisma
+packages/db/prisma/generated
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# Logs
+*.log
+npm-debug.log*
+pnpm-debug.log*
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode
+.idea
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# Uploads (arquivos gerados em runtime)
+apps/api/uploads/*
+!apps/api/uploads/.gitkeep
+
+# Test coverage
+coverage

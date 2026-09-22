@@ -1,0 +1,22 @@
+{
+  "name": "estoque-moto",
+  "private": true,
+  "scripts": {
+    "dev": "turbo dev",
+    "build": "turbo build",
+    "lint": "turbo lint",
+    "typecheck": "turbo typecheck",
+    "test": "turbo test",
+    "format": "prettier --write \"**/*.{ts,tsx,md,json}\" --ignore-path .gitignore"
+  },
+  "devDependencies": {
+    "turbo": "^2.5.3",
+    "prettier": "^3.5.3",
+    "typescript": "^5.8.3"
+  },
+  "packageManager": "pnpm@12.5.1",
+  "engines": {
+    "node": ">=20.0.0",
+    "pnpm": ">=12.0.0"
+  }
+}
