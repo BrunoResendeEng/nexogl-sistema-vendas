@@ -4,6 +4,7 @@
  * para formatar a resposta com o envelope correto.
  */
 export class DomainError extends Error {
+  readonly isDomainError = true;
   readonly code: string;
   readonly statusCode: number;
 
@@ -12,13 +13,19 @@ export class DomainError extends Error {
     this.name = 'DomainError';
     this.code = code;
     this.statusCode = statusCode;
+    // Remove statusCode da enumeração para o Fastify não tratar como HttpError nativo
+    Object.defineProperty(this, 'statusCode', {
+      value: statusCode,
+      enumerable: false,
+      writable: false,
+    });
   }
 }
 
 // ─── Estoque ──────────────────────────────────────────────────────────────────
 
 export class EstoqueInsuficienteError extends DomainError {
-  constructor(produtoId: string, estoqueAtual: number, qtdSolicitada: number) {
+  constructor(produtoId: number, estoqueAtual: number, qtdSolicitada: number) {
     super(
       'ESTOQUE_INSUFICIENTE',
       `Estoque insuficiente para o produto ${produtoId}: atual=${estoqueAtual}, solicitado=${qtdSolicitada}`,
@@ -28,7 +35,7 @@ export class EstoqueInsuficienteError extends DomainError {
 }
 
 export class ProdutoComEstoqueError extends DomainError {
-  constructor(produtoId: string, estoqueAtual: number) {
+  constructor(produtoId: number, estoqueAtual: number) {
     super(
       'PRODUTO_COM_ESTOQUE',
       `Produto ${produtoId} não pode ser desativado com estoque em ${estoqueAtual} unidade(s)`,
@@ -52,7 +59,7 @@ export class CodigoBarrasDuplicadoError extends DomainError {
 // ─── Produto ─────────────────────────────────────────────────────────────────
 
 export class ProdutoNaoEncontradoError extends DomainError {
-  constructor(id: string) {
+  constructor(id: number) {
     super('PRODUTO_NAO_ENCONTRADO', `Produto "${id}" não encontrado ou inativo`, 404);
   }
 }
@@ -60,7 +67,7 @@ export class ProdutoNaoEncontradoError extends DomainError {
 // ─── Fornecedor ───────────────────────────────────────────────────────────────
 
 export class FornecedorNaoEncontradoError extends DomainError {
-  constructor(id: string) {
+  constructor(id: number) {
     super(
       'FORNECEDOR_NAO_ENCONTRADO',
       `Fornecedor "${id}" não encontrado ou inativo`,
@@ -128,6 +135,14 @@ export class ObservacaoObrigatoriaError extends DomainError {
       `O campo "observação" é obrigatório para movimentações do tipo ${tipo}`,
       422,
     );
+  }
+}
+
+// ─── Venda ───────────────────────────────────────────────────────────────────
+
+export class VendaJaCanceladaError extends DomainError {
+  constructor(numero: string) {
+    super('VENDA_JA_CANCELADA', `A venda ${numero} já foi cancelada`, 422);
   }
 }
 

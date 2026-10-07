@@ -1,30 +1,21 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
+import fp from 'fastify-plugin';
 import fastifyJwt from '@fastify/jwt';
 import fastifyCookie from '@fastify/cookie';
 import { AcessoNegadoError, TokenExpiradoError } from '../errors/domain-errors.js';
-import type { Perfil } from '@repo/types';
+import { env } from '../config/env.js';
 
-declare module '@fastify/jwt' {
-  interface FastifyJWT {
-    payload: { sub: string; perfil: Perfil };
-    user: { sub: string; perfil: Perfil };
-  }
-}
-
-export async function authPlugin(app: FastifyInstance): Promise<void> {
-  // Registra cookie parser
+async function authPluginFn(app: FastifyInstance): Promise<void> {
   await app.register(fastifyCookie);
 
-  // Registra JWT — lê accessToken do cookie HttpOnly
   await app.register(fastifyJwt, {
-    secret: process.env['JWT_SECRET'] ?? 'dev-secret',
+    secret: env.JWT_SECRET,
     cookie: {
       cookieName: 'accessToken',
       signed: false,
     },
   });
 
-  // Decorator: valida accessToken e injeta request.user
   app.decorate(
     'authenticate',
     async (request: FastifyRequest, reply: FastifyReply) => {
@@ -39,12 +30,13 @@ export async function authPlugin(app: FastifyInstance): Promise<void> {
     },
   );
 
-  // Decorator: exige perfil específico (usa após authenticate)
   app.decorate(
     'requirePerfil',
-    (perfisPermitidos: Perfil[]) =>
+    (perfisPermitidos: import('@repo/types').Perfil[]) =>
       async (request: FastifyRequest, reply: FastifyReply) => {
         const perfil = request.user?.perfil;
+        // MASTER tem acesso a tudo
+        if (perfil === 'MASTER') return;
         if (!perfil || !perfisPermitidos.includes(perfil)) {
           const error = new AcessoNegadoError();
           return reply.status(error.statusCode).send({
@@ -55,12 +47,4 @@ export async function authPlugin(app: FastifyInstance): Promise<void> {
   );
 }
 
-// Augment FastifyInstance com os decorators
-declare module 'fastify' {
-  interface FastifyInstance {
-    authenticate: (request: FastifyRequest, reply: FastifyReply) => Promise<void>;
-    requirePerfil: (
-      perfis: Perfil[],
-    ) => (request: FastifyRequest, reply: FastifyReply) => Promise<void>;
-  }
-}
+export const authPlugin = fp(authPluginFn);

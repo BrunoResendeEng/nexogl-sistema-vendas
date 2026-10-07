@@ -1,7 +1,8 @@
 import type { FastifyInstance } from 'fastify';
+import fp from 'fastify-plugin';
 import fastifyRateLimit from '@fastify/rate-limit';
 
-export async function rateLimitPlugin(app: FastifyInstance): Promise<void> {
+async function rateLimitPluginFn(app: FastifyInstance): Promise<void> {
   await app.register(fastifyRateLimit, {
     max: 100,
     timeWindow: '1 minute',
@@ -13,3 +14,5 @@ export async function rateLimitPlugin(app: FastifyInstance): Promise<void> {
     }),
   });
 }
+
+export const rateLimitPlugin = fp(rateLimitPluginFn);

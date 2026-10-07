@@ -2,6 +2,13 @@ packages:
   - "apps/*"
   - "packages/*"
 
+supportedArchitectures:
+  os:
+    - win32
+    - linux
+  cpu:
+    - x64
+
 # Pacotes autorizados a rodar build scripts (exigido pelo pnpm 12)
 allowBuilds:
   "@prisma/client": true

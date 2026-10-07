@@ -1,10 +1,3 @@
-/**
- * Wrapper de fetch para a API Fastify.
- * - Inclui credentials: 'include' em todas as requisições (cookies HttpOnly)
- * - Padroniza headers e tratamento de erro
- * - Base URL via NEXT_PUBLIC_API_URL
- */
-
 const BASE_URL =
   process.env['NEXT_PUBLIC_API_URL'] ?? 'http://localhost:3001/api/v1';
 
@@ -26,7 +19,29 @@ export class ApiClientError extends Error {
   }
 }
 
-async function request<T>(path: string, options: RequestOptions = {}): Promise<T> {
+async function tryRefresh(): Promise<boolean> {
+  try {
+    const res = await fetch(`${BASE_URL}/auth/refresh`, {
+      method: 'POST',
+      credentials: 'include',
+    });
+    return res.ok;
+  } catch {
+    return false;
+  }
+}
+
+function redirectToLogin() {
+  if (typeof window !== 'undefined') {
+    window.location.href = '/login';
+  }
+}
+
+async function request<T>(
+  path: string,
+  options: RequestOptions = {},
+  isRetry = false,
+): Promise<T> {
   const { body, headers, ...rest } = options;
 
   const response = await fetch(`${BASE_URL}${path}`, {
@@ -39,17 +54,26 @@ async function request<T>(path: string, options: RequestOptions = {}): Promise<T
     body: body !== undefined ? JSON.stringify(body) : undefined,
   });
 
-  const data = await response.json() as unknown;
+  const data = response.status === 204 ? null : (await response.json()) as unknown;
 
   if (!response.ok) {
-    const errorData = data as { error?: { code?: string; message?: string; details?: unknown } };
+    const errorData = data as {
+      error?: { code?: string; message?: string; details?: unknown };
+    };
     const error = errorData?.error;
-    throw new ApiClientError(
-      error?.code ?? 'ERRO_DESCONHECIDO',
-      error?.message ?? 'Erro desconhecido',
-      response.status,
-      error?.details,
-    );
+    const code = error?.code ?? 'ERRO_DESCONHECIDO';
+    const message = error?.message ?? 'Erro desconhecido';
+
+    // Token expirado — tenta refresh uma vez
+    if (code === 'TOKEN_EXPIRADO' && !isRetry) {
+      const refreshed = await tryRefresh();
+      if (refreshed) {
+        return request<T>(path, options, true);
+      }
+      redirectToLogin();
+    }
+
+    throw new ApiClientError(code, message, response.status, error?.details);
   }
 
   return data as T;

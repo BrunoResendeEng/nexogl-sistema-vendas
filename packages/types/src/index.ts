@@ -1,3 +1,4 @@
+export * from './auth.types.js';
 export * from './usuario.types.js';
 export * from './produto.types.js';
 export * from './movimentacao.types.js';

@@ -1,6 +1,7 @@
 // Const objects em vez de TypeScript enum (conforme tech.md)
 
 export const Perfil = {
+  MASTER: 'MASTER',
   ADMIN: 'ADMIN',
   OPERADOR: 'OPERADOR',
 } as const;

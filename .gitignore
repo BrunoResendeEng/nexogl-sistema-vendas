@@ -43,3 +43,6 @@ apps/api/uploads/*
 
 # Test coverage
 coverage
+
+# Pasta pessoal
+separa_todos_arquivos_na_pasta_sistema
